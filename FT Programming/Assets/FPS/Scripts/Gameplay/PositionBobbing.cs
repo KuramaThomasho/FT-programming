@@ -11,6 +11,9 @@ namespace Unity.FPS.Gameplay
         [Tooltip("Distance the item will move up and down")]
         public float BobbingAmount = 0.5f;
 
+        [Tooltip("If bobbing should happen")]
+        public bool canBob = true;
+
         Vector3 m_StartPosition;
 
         void Start()
@@ -22,8 +25,11 @@ namespace Unity.FPS.Gameplay
         void Update()
         {
             // Handle bobbing
-            float bobbingAnimationPhase = ((Mathf.Sin(Time.time * VerticalBobFrequency) * 0.5f) + 0.5f) * BobbingAmount;
-            transform.position = m_StartPosition + Vector3.up * bobbingAnimationPhase;
+            if (canBob)
+            {
+                float bobbingAnimationPhase = ((Mathf.Sin(Time.time * VerticalBobFrequency) * 0.5f) + 0.5f) * BobbingAmount;
+                transform.position = m_StartPosition + Vector3.up * bobbingAnimationPhase;
+            }
         }
     }
 }

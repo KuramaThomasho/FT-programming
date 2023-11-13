@@ -5,6 +5,7 @@ using UnityEngine.Events;
 namespace Unity.FPS.Gameplay
 {
     [RequireComponent(typeof(CharacterController), typeof(PlayerInputHandler), typeof(AudioSource))]
+    #region
     public class PlayerCharacterController : MonoBehaviour
     {
         [Header("References")] [Tooltip("Reference to the main camera used for the player")]
@@ -37,6 +38,9 @@ namespace Unity.FPS.Gameplay
 
         [Tooltip("Acceleration speed when in the air")]
         public float AccelerationSpeedInAir = 25f;
+
+        [Tooltip("Acceleration when sliding")]
+        public float SlideSpeedModifier = 2.5f;
 
         [Tooltip("Multiplicator for the sprint speed (based on grounded speed)")]
         public float SprintSpeedModifier = 2f;
@@ -77,7 +81,7 @@ namespace Unity.FPS.Gameplay
         [Tooltip("Sound played when jumping")] public AudioClip JumpSfx;
         [Tooltip("Sound played when landing")] public AudioClip LandSfx;
 
-        [Tooltip("Sound played when taking damage froma fall")]
+        [Tooltip("Sound played when taking damage from fall")]
         public AudioClip FallDamageSfx;
 
         [Header("Fall Damage")]
@@ -96,14 +100,22 @@ namespace Unity.FPS.Gameplay
         [Tooltip("Damage recieved when falling at the maximum speed")]
         public float FallDamageAtMaxSpeed = 50f;
 
+        [Tooltip("StateMachine for the player")]
+        PlayerStateMachine currentState;
+        public PlayerWalkState Walk_State = new PlayerWalkState();
+        public PlayerCrouchState Crouch_State = new PlayerCrouchState();
+        public PlayerJumpState Jump_State = new PlayerJumpState();
+        public PlayerSlideState Slide_State = new PlayerSlideState();
+        public PlayerHookState Hook_State = new PlayerHookState();
+
         public UnityAction<bool> OnStanceChanged;
 
         public Vector3 CharacterVelocity { get; set; }
-        public bool IsGrounded { get; private set; }
-        public bool HasJumpedThisFrame { get; private set; }
+        public bool IsGrounded { get; set; }
+        public bool HasJumpedThisFrame { get; set; }
         public bool IsDead { get; private set; }
         public bool IsCrouching { get; private set; }
-
+#endregion
         public float RotationMultiplier
         {
             get
@@ -117,21 +129,24 @@ namespace Unity.FPS.Gameplay
             }
         }
 
+        #region
+
         Health m_Health;
-        PlayerInputHandler m_InputHandler;
-        CharacterController m_Controller;
+        public PlayerInputHandler m_InputHandler;
+        public CharacterController m_Controller;
         PlayerWeaponsManager m_WeaponsManager;
-        Actor m_Actor;
-        Vector3 m_GroundNormal;
+        public Actor m_Actor;
+        public Vector3 m_GroundNormal;
         Vector3 m_CharacterVelocity;
         Vector3 m_LatestImpactSpeed;
-        float m_LastTimeJumped = 0f;
+        public float m_LastTimeJumped = 0f;
         float m_CameraVerticalAngle = 0f;
         float m_FootstepDistanceCounter;
-        float m_TargetCharacterHeight;
+        public float m_TargetCharacterHeight;
 
         const float k_JumpGroundingPreventionTime = 0.2f;
         const float k_GroundCheckDistanceInAir = 0.07f;
+        #endregion
 
         void Awake()
         {
@@ -142,6 +157,10 @@ namespace Unity.FPS.Gameplay
 
         void Start()
         {
+            //Setting the state of the player
+            currentState = Walk_State;
+            currentState.EnterState(this);
+
             // fetch components on the same gameObject
             m_Controller = GetComponent<CharacterController>();
             DebugUtility.HandleErrorIfNullGetComponent<CharacterController, PlayerCharacterController>(m_Controller,
@@ -172,6 +191,8 @@ namespace Unity.FPS.Gameplay
 
         void Update()
         {
+            //Updating State
+            currentState.UpdateState(this);
             // check for Y kill
             if (!IsDead && transform.position.y < KillHeight)
             {
@@ -216,7 +237,13 @@ namespace Unity.FPS.Gameplay
             HandleCharacterMovement();
         }
 
-        void OnDie()
+        public void SwitchState(PlayerStateMachine state)
+        {
+            currentState = state;
+            state.EnterState(this);
+        }
+
+        public void OnDie()
         {
             IsDead = true;
 
@@ -226,7 +253,7 @@ namespace Unity.FPS.Gameplay
             EventManager.Broadcast(Events.PlayerDeathEvent);
         }
 
-        void GroundCheck()
+        public void GroundCheck()
         {
             // Make sure that the ground check distance while already in air is very small, to prevent suddenly snapping to ground
             float chosenGroundCheckDistance =
@@ -294,6 +321,13 @@ namespace Unity.FPS.Gameplay
                     isSprinting = SetCrouchingState(false, false);
                 }
 
+                /*
+                 if (isSprinting){
+                    speedModifier = SprintSpeedModifier;
+                 else speedModifier = 1f;
+                 
+                 thats what the bottom line is 
+                 1*/
                 float speedModifier = isSprinting ? SprintSpeedModifier : 1f;
 
                 // converts move input to a worldspace vector based on our character's transform orientation
@@ -387,19 +421,19 @@ namespace Unity.FPS.Gameplay
         }
 
         // Returns true if the slope angle represented by the given normal is under the slope angle limit of the character controller
-        bool IsNormalUnderSlopeLimit(Vector3 normal)
+        public bool IsNormalUnderSlopeLimit(Vector3 normal)
         {
             return Vector3.Angle(transform.up, normal) <= m_Controller.slopeLimit;
         }
 
         // Gets the center point of the bottom hemisphere of the character controller capsule    
-        Vector3 GetCapsuleBottomHemisphere()
+        public Vector3 GetCapsuleBottomHemisphere()
         {
             return transform.position + (transform.up * m_Controller.radius);
         }
 
         // Gets the center point of the top hemisphere of the character controller capsule    
-        Vector3 GetCapsuleTopHemisphere(float atHeight)
+        public Vector3 GetCapsuleTopHemisphere(float atHeight)
         {
             return transform.position + (transform.up * (atHeight - m_Controller.radius));
         }
@@ -411,7 +445,7 @@ namespace Unity.FPS.Gameplay
             return Vector3.Cross(slopeNormal, directionRight).normalized;
         }
 
-        void UpdateCharacterHeight(bool force)
+        public void UpdateCharacterHeight(bool force)
         {
             // Update height instantly
             if (force)

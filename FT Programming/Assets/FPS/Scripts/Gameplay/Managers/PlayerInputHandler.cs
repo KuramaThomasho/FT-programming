@@ -156,6 +156,16 @@ namespace Unity.FPS.Gameplay
             return false;
         }
 
+        public bool GetCrouchInputHeld()
+        {
+            if (CanProcessInput())
+            {
+                return Input.GetButton(GameConstants.k_ButtonNameCrouch);
+            }
+
+            return false;
+        }
+
         public bool GetCrouchInputReleased()
         {
             if (CanProcessInput())
