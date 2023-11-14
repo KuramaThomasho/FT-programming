@@ -131,17 +131,17 @@ namespace Unity.FPS.Gameplay
 
         #region
 
-        Health m_Health;
+        public Health m_Health;
         public PlayerInputHandler m_InputHandler;
         public CharacterController m_Controller;
         PlayerWeaponsManager m_WeaponsManager;
         public Actor m_Actor;
         public Vector3 m_GroundNormal;
         Vector3 m_CharacterVelocity;
-        Vector3 m_LatestImpactSpeed;
+        public Vector3 m_LatestImpactSpeed;
         public float m_LastTimeJumped = 0f;
         float m_CameraVerticalAngle = 0f;
-        float m_FootstepDistanceCounter;
+        public float m_FootstepDistanceCounter;
         public float m_TargetCharacterHeight;
 
         const float k_JumpGroundingPreventionTime = 0.2f;
@@ -157,10 +157,6 @@ namespace Unity.FPS.Gameplay
 
         void Start()
         {
-            //Setting the state of the player
-            currentState = Walk_State;
-            currentState.EnterState(this);
-
             // fetch components on the same gameObject
             m_Controller = GetComponent<CharacterController>();
             DebugUtility.HandleErrorIfNullGetComponent<CharacterController, PlayerCharacterController>(m_Controller,
@@ -184,57 +180,25 @@ namespace Unity.FPS.Gameplay
 
             m_Health.OnDie += OnDie;
 
-            // force the crouch state to false when starting
-            SetCrouchingState(false, true);
             UpdateCharacterHeight(true);
+
+            //Setting the state of the player
+            currentState = Walk_State;
+            currentState.EnterState(this);
         }
 
         void Update()
         {
             //Updating State
             currentState.UpdateState(this);
+
             // check for Y kill
             if (!IsDead && transform.position.y < KillHeight)
             {
                 m_Health.Kill();
             }
 
-            HasJumpedThisFrame = false;
-
-            bool wasGrounded = IsGrounded;
-            GroundCheck();
-
-            // landing
-            if (IsGrounded && !wasGrounded)
-            {
-                // Fall damage
-                float fallSpeed = -Mathf.Min(CharacterVelocity.y, m_LatestImpactSpeed.y);
-                float fallSpeedRatio = (fallSpeed - MinSpeedForFallDamage) /
-                                       (MaxSpeedForFallDamage - MinSpeedForFallDamage);
-                if (RecievesFallDamage && fallSpeedRatio > 0f)
-                {
-                    float dmgFromFall = Mathf.Lerp(FallDamageAtMinSpeed, FallDamageAtMaxSpeed, fallSpeedRatio);
-                    m_Health.TakeDamage(dmgFromFall, null);
-
-                    // fall damage SFX
-                    AudioSource.PlayOneShot(FallDamageSfx);
-                }
-                else
-                {
-                    // land SFX
-                    AudioSource.PlayOneShot(LandSfx);
-                }
-            }
-
-            // crouching
-            if (m_InputHandler.GetCrouchInputDown())
-            {
-                SetCrouchingState(!IsCrouching, false);
-            }
-
-            UpdateCharacterHeight(false);
-
-            HandleCharacterMovement();
+            //Debug.Log("Updating in manager");
         }
 
         public void SwitchState(PlayerStateMachine state)
@@ -290,7 +254,7 @@ namespace Unity.FPS.Gameplay
                 }
             }
         }
-
+        /*
         void HandleCharacterMovement()
         {
             // horizontal character rotation
@@ -321,13 +285,13 @@ namespace Unity.FPS.Gameplay
                     isSprinting = SetCrouchingState(false, false);
                 }
 
-                /*
-                 if (isSprinting){
-                    speedModifier = SprintSpeedModifier;
-                 else speedModifier = 1f;
+                
+                 //if (isSprinting){
+                    //speedModifier = SprintSpeedModifier;
+                 //else speedModifier = 1f;
                  
-                 thats what the bottom line is 
-                 1*/
+                 //thats what the bottom line is 
+                 
                 float speedModifier = isSprinting ? SprintSpeedModifier : 1f;
 
                 // converts move input to a worldspace vector based on our character's transform orientation
@@ -418,7 +382,7 @@ namespace Unity.FPS.Gameplay
 
                 CharacterVelocity = Vector3.ProjectOnPlane(CharacterVelocity, hit.normal);
             }
-        }
+        }*/
 
         // Returns true if the slope angle represented by the given normal is under the slope angle limit of the character controller
         public bool IsNormalUnderSlopeLimit(Vector3 normal)
@@ -466,46 +430,6 @@ namespace Unity.FPS.Gameplay
                     Vector3.up * m_TargetCharacterHeight * CameraHeightRatio, CrouchingSharpness * Time.deltaTime);
                 m_Actor.AimPoint.transform.localPosition = m_Controller.center;
             }
-        }
-
-        // returns false if there was an obstruction
-        bool SetCrouchingState(bool crouched, bool ignoreObstructions)
-        {
-            // set appropriate heights
-            if (crouched)
-            {
-                m_TargetCharacterHeight = CapsuleHeightCrouching;
-            }
-            else
-            {
-                // Detect obstructions
-                if (!ignoreObstructions)
-                {
-                    Collider[] standingOverlaps = Physics.OverlapCapsule(
-                        GetCapsuleBottomHemisphere(),
-                        GetCapsuleTopHemisphere(CapsuleHeightStanding),
-                        m_Controller.radius,
-                        -1,
-                        QueryTriggerInteraction.Ignore);
-                    foreach (Collider c in standingOverlaps)
-                    {
-                        if (c != m_Controller)
-                        {
-                            return false;
-                        }
-                    }
-                }
-
-                m_TargetCharacterHeight = CapsuleHeightStanding;
-            }
-
-            if (OnStanceChanged != null)
-            {
-                OnStanceChanged.Invoke(crouched);
-            }
-
-            IsCrouching = crouched;
-            return true;
-        }
+        }   
     }
 }
