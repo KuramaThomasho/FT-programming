@@ -127,7 +127,7 @@ public class PlayerWalkState : PlayerStateMachine
     }
     public override void UpdateState(PlayerCharacterController Player)
     {
-        Debug.Log("UPDATING");
+        Debug.Log("UPDATING"); 
         Player.HasJumpedThisFrame = false;
         bool wasGrounded = Player.IsGrounded;
         Player.GroundCheck();
