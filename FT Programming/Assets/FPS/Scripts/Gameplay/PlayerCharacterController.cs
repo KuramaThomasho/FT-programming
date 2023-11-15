@@ -100,6 +100,32 @@ namespace Unity.FPS.Gameplay
         [Tooltip("Damage recieved when falling at the maximum speed")]
         public float FallDamageAtMaxSpeed = 50f;
 
+        [Header("Funny test")]
+        public GameObject gameObject;
+        public Rigidbody rb;
+        private bool collided;
+
+        [Header("Variables for grappling")]
+        //Referencing
+        public Transform cam;
+        public Transform gunTip;
+        public LayerMask whatIsGrappleable;
+        public LineRenderer lr;
+
+        //Grappling
+        public float grappleDistance;
+        public float overshootYAxis;
+        private Vector3 targetPosition;
+
+        //Cooldown
+        public float grapplingCd;
+        [SerializeField]
+        private float grapplingCdTimer;
+
+        //State
+        private bool grappling;
+
+        [Header("Intialized at Start")]
         public UnityAction<bool> OnStanceChanged;
 
         public Vector3 CharacterVelocity { get; set; }
@@ -214,10 +240,19 @@ namespace Unity.FPS.Gameplay
                 }
             }
 
+            if (m_InputHandler.GetSprintInputHeld()) this.PlayerCamera.fieldOfView = 90f;
+            else if (m_InputHandler.GetSprintInputReleased()) this.PlayerCamera.fieldOfView = 80f;
+
             // crouching or sliding or hooking
             if (m_InputHandler.GetHookDown())
             {
-                Hook();
+                if (canHook())
+                {
+                    Hook();
+                    //Starting countdown for cooldown
+                    grapplingCdTimer = grapplingCd;
+                }
+                
             }
             else if (m_InputHandler.GetCrouchInputDown() && !isSprinting)
             {
@@ -229,9 +264,26 @@ namespace Unity.FPS.Gameplay
                 UpdateCharacterHeight(false);
             }
 
+            if (grapplingCdTimer > 0) grapplingCdTimer -= Time.deltaTime;
+
             UpdateCharacterHeight(false);
 
             HandleCharacterMovement();
+        }
+
+        private void LateUpdate()
+        {
+            if (grappling) 
+                lr.SetPosition(0, gunTip.position);
+        }
+        private void FixedUpdate()
+        {
+            while (!collided)
+            {
+                var Direction = targetPosition - transform.position;
+
+                m_Controller.Move(Direction / Direction.magnitude);
+            }
         }
         public void Sliding()
         {
@@ -246,14 +298,54 @@ namespace Unity.FPS.Gameplay
             UpdateCharacterHeight(false);
 
         }
+        private bool canHook()
+        {
+            if (grapplingCdTimer <= 0)
+            {
+                return true;
+            }
+            else return false;
+        }
+        private void DestroyLine()
+        {
+            lr.enabled = false;
+        }
         public void Hook()
         {
             /*
              * Raycast to see that it hits the wall
-             * Variables(maxHookLength, reelSpeed, hookCooldown, hookCooldownTimer)
-             * 
-             * 
-             */
+            */
+            if (grapplingCdTimer > 0) return;
+
+            grappling = true;
+
+            RaycastHit hit;
+
+            if (Physics.Raycast(cam.position, cam.forward, out hit, grappleDistance, whatIsGrappleable))
+            {
+                targetPosition = hit.point;
+
+                grapplingCdTimer = grapplingCd/2f;
+
+                Instantiate(gameObject, targetPosition, Quaternion.identity);
+
+                Invoke(nameof(DestroyLine), 5f);
+            }
+            else
+            {
+                targetPosition = cam.position + cam.forward * grappleDistance;
+
+                grappling = false;
+
+                grapplingCdTimer = grapplingCd;
+
+                Invoke(nameof(DestroyLine), 2f);
+
+            }
+
+            lr.enabled = true;
+            lr.SetPosition(1, targetPosition);
+
         }
         public void OnDie()
         {
@@ -336,6 +428,7 @@ namespace Unity.FPS.Gameplay
                  else speedModifier = 1f; 
                  thats what the bottom line is 
                  1*/
+
                 float speedModifier = isSprinting ? SprintSpeedModifier : 1f;
 
                 // converts move input to a worldspace vector based on our character's transform orientation
@@ -514,6 +607,16 @@ namespace Unity.FPS.Gameplay
 
             IsCrouching = crouched;
             return true;
+        }
+
+        //Collision
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (collision.gameObject.CompareTag("Trigger"))
+            {
+                collided = true;
+            }
+            else collided = false;
         }
     }
 }
