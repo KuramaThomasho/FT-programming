@@ -62,6 +62,15 @@ namespace Unity.FPS.Gameplay
             return Vector3.zero;
         }
 
+        public bool GetHookDown()
+        {
+            if (CanProcessInput())
+            {
+                return Input.GetButtonDown(GameConstants.k_ButtonNameHook);
+            }
+            return false;
+        }
+
         public float GetLookInputsHorizontal()
         {
             return GetMouseOrStickLookAxis(GameConstants.k_MouseAxisNameHorizontal,

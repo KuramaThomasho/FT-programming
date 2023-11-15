@@ -15,6 +15,7 @@
         public const string k_ButtonNameSprint = "Sprint";
         public const string k_ButtonNameJump = "Jump";
         public const string k_ButtonNameCrouch = "Crouch";
+        public const string k_ButtonNameHook = "Hook";
 
         public const string k_ButtonNameGamepadFire = "Gamepad Fire";
         public const string k_ButtonNameGamepadAim = "Gamepad Aim";
@@ -25,5 +26,6 @@
         public const string k_ButtonNameSubmit = "Submit";
         public const string k_ButtonNameCancel = "Cancel";
         public const string k_ButtonReload = "Reload";
+        
     }
 }

@@ -100,14 +100,6 @@ namespace Unity.FPS.Gameplay
         [Tooltip("Damage recieved when falling at the maximum speed")]
         public float FallDamageAtMaxSpeed = 50f;
 
-        [Tooltip("StateMachine for the player")]
-        PlayerStateMachine currentState;
-        public PlayerWalkState Walk_State = new PlayerWalkState();
-        public PlayerCrouchState Crouch_State = new PlayerCrouchState();
-        public PlayerJumpState Jump_State = new PlayerJumpState();
-        public PlayerSlideState Slide_State = new PlayerSlideState();
-        public PlayerHookState Hook_State = new PlayerHookState();
-
         public UnityAction<bool> OnStanceChanged;
 
         public Vector3 CharacterVelocity { get; set; }
@@ -157,10 +149,6 @@ namespace Unity.FPS.Gameplay
 
         void Start()
         {
-            //Setting the state of the player
-            currentState = Walk_State;
-            currentState.EnterState(this);
-
             // fetch components on the same gameObject
             m_Controller = GetComponent<CharacterController>();
             DebugUtility.HandleErrorIfNullGetComponent<CharacterController, PlayerCharacterController>(m_Controller,
@@ -191,8 +179,8 @@ namespace Unity.FPS.Gameplay
 
         void Update()
         {
-            //Updating State
-            currentState.UpdateState(this);
+            bool isSprinting = m_InputHandler.GetSprintInputHeld();
+
             // check for Y kill
             if (!IsDead && transform.position.y < KillHeight)
             {
@@ -226,23 +214,47 @@ namespace Unity.FPS.Gameplay
                 }
             }
 
-            // crouching
-            if (m_InputHandler.GetCrouchInputDown())
+            // crouching or sliding or hooking
+            if (m_InputHandler.GetHookDown())
+            {
+                Hook();
+            }
+            else if (m_InputHandler.GetCrouchInputDown() && !isSprinting)
             {
                 SetCrouchingState(!IsCrouching, false);
+            }
+            else if (m_InputHandler.GetCrouchInputDown() && isSprinting && !IsCrouching)
+            {
+                Sliding();
+                UpdateCharacterHeight(false);
             }
 
             UpdateCharacterHeight(false);
 
             HandleCharacterMovement();
         }
-
-        public void SwitchState(PlayerStateMachine state)
+        public void Sliding()
         {
-            currentState = state;
-            state.EnterState(this);
-        }
+            /*
+             * Use crouch code for capsule height
+             * Increase speed
+             * Add gradually lower speed
+             * when speed 0 set crouch to true
+             */
+            //Changes the character height
+            m_TargetCharacterHeight = CapsuleHeightCrouching;
+            UpdateCharacterHeight(false);
 
+        }
+        public void Hook()
+        {
+            /*
+             * Raycast to see that it hits the wall
+             * Variables(maxHookLength, reelSpeed, hookCooldown, hookCooldownTimer)
+             * 
+             * 
+             */
+        }
         public void OnDie()
         {
             IsDead = true;
@@ -316,16 +328,12 @@ namespace Unity.FPS.Gameplay
             // character movement handling
             bool isSprinting = m_InputHandler.GetSprintInputHeld();
             {
-                if (isSprinting)
-                {
-                    isSprinting = SetCrouchingState(false, false);
-                }
+                if (isSprinting) isSprinting = SetCrouchingState(false, false);
 
                 /*
                  if (isSprinting){
                     speedModifier = SprintSpeedModifier;
-                 else speedModifier = 1f;
-                 
+                 else speedModifier = 1f; 
                  thats what the bottom line is 
                  1*/
                 float speedModifier = isSprinting ? SprintSpeedModifier : 1f;
@@ -351,8 +359,8 @@ namespace Unity.FPS.Gameplay
                     // jumping
                     if (IsGrounded && m_InputHandler.GetJumpInputDown())
                     {
-                        // force the crouch state to false
-                        if (SetCrouchingState(false, false))
+                         // force the crouch state to false
+                        if (SetCrouchingState(false, true))
                         {
                             // start by canceling out the vertical component of our velocity
                             CharacterVelocity = new Vector3(CharacterVelocity.x, 0f, CharacterVelocity.z);
