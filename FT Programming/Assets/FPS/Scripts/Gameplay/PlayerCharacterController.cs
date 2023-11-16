@@ -101,7 +101,8 @@ namespace Unity.FPS.Gameplay
         public float FallDamageAtMaxSpeed = 50f;
 
         [Header("Funny test")]
-        public GameObject gameObject;
+        public GameObject gameObjectSphere;
+        private GameObject collidingSphere;
         public Rigidbody rb;
         private bool collided;
 
@@ -111,18 +112,18 @@ namespace Unity.FPS.Gameplay
         public Transform gunTip;
         public LayerMask whatIsGrappleable;
         public LineRenderer lr;
+        public float grappleSpeed = 30f;
 
         //Grappling
         public float grappleDistance;
-        public float overshootYAxis;
         private Vector3 targetPosition;
 
         //Cooldown
         public float grapplingCd;
         [SerializeField]
         private float grapplingCdTimer;
-
-        //State
+        private float k_HookGroundingPreventionTime = 0.5f;
+        public float hookTimer;
         private bool grappling;
 
         [Header("Intialized at Start")]
@@ -155,9 +156,11 @@ namespace Unity.FPS.Gameplay
         PlayerWeaponsManager m_WeaponsManager;
         public Actor m_Actor;
         public Vector3 m_GroundNormal;
+        public Vector3 m_slideDirection;
         Vector3 m_CharacterVelocity;
         Vector3 m_LatestImpactSpeed;
         public float m_LastTimeJumped = 0f;
+        public bool m_LastTimeHooked = false;
         float m_CameraVerticalAngle = 0f;
         float m_FootstepDistanceCounter;
         public float m_TargetCharacterHeight;
@@ -216,6 +219,7 @@ namespace Unity.FPS.Gameplay
             HasJumpedThisFrame = false;
 
             bool wasGrounded = IsGrounded;
+
             GroundCheck();
 
             // landing
@@ -246,28 +250,47 @@ namespace Unity.FPS.Gameplay
             // crouching or sliding or hooking
             if (m_InputHandler.GetHookDown())
             {
-                if (canHook())
+                if (canHook() && !grappling)
                 {
+                    SetCrouchingState(false, false);
+
+                    m_LastTimeHooked = true;
+                    hookTimer = k_HookGroundingPreventionTime;
                     Hook();
+
                     //Starting countdown for cooldown
                     grapplingCdTimer = grapplingCd;
+
+                    // Force grounding to false
+                    IsGrounded = false;
                 }
                 
+            }
+            else if (m_InputHandler.GetCrouchInputDown() && isSprinting && !IsCrouching)
+            {
+                float chosenGroundCheckDistance =
+               IsGrounded ? (m_Controller.skinWidth + GroundCheckDistance) : k_GroundCheckDistanceInAir;
+
+                //Produces ray cast and it is basically a ground check
+                if (Physics.CapsuleCast(GetCapsuleBottomHemisphere(), GetCapsuleTopHemisphere(m_Controller.height),
+                            m_Controller.radius, Vector3.down, out RaycastHit hit, chosenGroundCheckDistance, GroundCheckLayers,
+                            QueryTriggerInteraction.Ignore))
+                {
+                    Sliding(hit.normal);
+                    //UpdateCharacterHeight(false);
+                }
+                    
             }
             else if (m_InputHandler.GetCrouchInputDown() && !isSprinting)
             {
                 SetCrouchingState(!IsCrouching, false);
             }
-            else if (m_InputHandler.GetCrouchInputDown() && isSprinting && !IsCrouching)
-            {
-                Sliding();
-                UpdateCharacterHeight(false);
-            }
 
+            if (hookTimer > 0) hookTimer -= Time.deltaTime;
             if (grapplingCdTimer > 0) grapplingCdTimer -= Time.deltaTime;
 
             UpdateCharacterHeight(false);
-
+            //Debug.Log(CharacterVelocity);
             HandleCharacterMovement();
         }
 
@@ -276,16 +299,30 @@ namespace Unity.FPS.Gameplay
             if (grappling) 
                 lr.SetPosition(0, gunTip.position);
         }
-        private void FixedUpdate()
+        private void FixedUpdate() 
         {
-            while (!collided)
-            {
-                var Direction = targetPosition - transform.position;
+            var Direction = targetPosition - transform.position;
 
-                m_Controller.Move(Direction / Direction.magnitude);
+            if (grappling)
+            {
+                CharacterVelocity = new Vector3(0f, 0f, 0f);
+
+                //Debug.Log(Direction.magnitude);
+
+                CharacterVelocity += Direction.normalized * grappleSpeed;
+
+
             }
+
+            if (hookTimer <= 0 && Direction.magnitude < 0.5f)
+            {
+                grappling = false;
+            }
+
+            //Debug.Log(transform.up);
+
         }
-        public void Sliding()
+        public void Sliding(Vector3 direction)
         {
             /*
              * Use crouch code for capsule height
@@ -296,6 +333,8 @@ namespace Unity.FPS.Gameplay
             //Changes the character height
             m_TargetCharacterHeight = CapsuleHeightCrouching;
             UpdateCharacterHeight(false);
+            
+
 
         }
         private bool canHook()
@@ -327,8 +366,6 @@ namespace Unity.FPS.Gameplay
 
                 grapplingCdTimer = grapplingCd/2f;
 
-                Instantiate(gameObject, targetPosition, Quaternion.identity);
-
                 Invoke(nameof(DestroyLine), 5f);
             }
             else
@@ -359,6 +396,7 @@ namespace Unity.FPS.Gameplay
 
         public void GroundCheck()
         {
+            
             // Make sure that the ground check distance while already in air is very small, to prevent suddenly snapping to ground
             float chosenGroundCheckDistance =
                 IsGrounded ? (m_Controller.skinWidth + GroundCheckDistance) : k_GroundCheckDistanceInAir;
@@ -368,27 +406,33 @@ namespace Unity.FPS.Gameplay
             m_GroundNormal = Vector3.up;
 
             // only try to detect ground if it's been a short amount of time since last jump; otherwise we may snap to the ground instantly after we try jumping
-            if (Time.time >= m_LastTimeJumped + k_JumpGroundingPreventionTime)
+            if (hookTimer <= 0)
             {
-                // if we're grounded, collect info about the ground normal with a downward capsule cast representing our character capsule
-                if (Physics.CapsuleCast(GetCapsuleBottomHemisphere(), GetCapsuleTopHemisphere(m_Controller.height),
-                    m_Controller.radius, Vector3.down, out RaycastHit hit, chosenGroundCheckDistance, GroundCheckLayers,
-                    QueryTriggerInteraction.Ignore))
+                if (Time.time >= m_LastTimeJumped + k_JumpGroundingPreventionTime)
                 {
-                    // storing the upward direction for the surface found
-                    m_GroundNormal = hit.normal;
-
-                    // Only consider this a valid ground hit if the ground normal goes in the same direction as the character up
-                    // and if the slope angle is lower than the character controller's limit
-                    if (Vector3.Dot(hit.normal, transform.up) > 0f &&
-                        IsNormalUnderSlopeLimit(m_GroundNormal))
+                    // if we're grounded, collect info about the ground normal with a downward capsule cast representing our character capsule
+                    if (Physics.CapsuleCast(GetCapsuleBottomHemisphere(), GetCapsuleTopHemisphere(m_Controller.height),
+                        m_Controller.radius, Vector3.down, out RaycastHit hit, chosenGroundCheckDistance, GroundCheckLayers,
+                        QueryTriggerInteraction.Ignore))
                     {
-                        IsGrounded = true;
+                        // storing the upward direction for the surface found
+                        m_GroundNormal = hit.normal;
 
-                        // handle snapping to the ground
-                        if (hit.distance > m_Controller.skinWidth)
+                        Debug.Log(m_GroundNormal);
+
+                        // Only consider this a valid ground hit if the ground normal goes in the same direction as the character up
+                        // and if the slope angle is lower than the character controller's limit
+                        if (Vector3.Dot(hit.normal, transform.up) > 0f &&
+                            IsNormalUnderSlopeLimit(m_GroundNormal))
                         {
-                            m_Controller.Move(Vector3.down * hit.distance);
+                            IsGrounded = true;
+
+                            // handle snapping to the ground
+                            if (hit.distance > m_Controller.skinWidth)
+                            {
+                                m_Controller.Move(Vector3.down * hit.distance);
+
+                            }
                         }
                     }
                 }
@@ -487,7 +531,7 @@ namespace Unity.FPS.Gameplay
                     m_FootstepDistanceCounter += CharacterVelocity.magnitude * Time.deltaTime;
                 }
                 // handle air movement
-                else
+                else if(!grappling)
                 {
                     // add air acceleration
                     CharacterVelocity += worldspaceMoveInput * AccelerationSpeedInAir * Time.deltaTime;
@@ -526,6 +570,8 @@ namespace Unity.FPS.Gameplay
         {
             return Vector3.Angle(transform.up, normal) <= m_Controller.slopeLimit;
         }
+
+        
 
         // Gets the center point of the bottom hemisphere of the character controller capsule    
         public Vector3 GetCapsuleBottomHemisphere()
@@ -609,14 +655,5 @@ namespace Unity.FPS.Gameplay
             return true;
         }
 
-        //Collision
-        private void OnCollisionEnter(Collision collision)
-        {
-            if (collision.gameObject.CompareTag("Trigger"))
-            {
-                collided = true;
-            }
-            else collided = false;
-        }
     }
 }
