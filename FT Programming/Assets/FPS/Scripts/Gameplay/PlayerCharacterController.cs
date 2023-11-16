@@ -419,6 +419,7 @@ namespace Unity.FPS.Gameplay
                         m_GroundNormal = hit.normal;
 
                         Debug.Log(m_GroundNormal);
+                        Debug.Log(hit.normal);
 
                         // Only consider this a valid ground hit if the ground normal goes in the same direction as the character up
                         // and if the slope angle is lower than the character controller's limit
