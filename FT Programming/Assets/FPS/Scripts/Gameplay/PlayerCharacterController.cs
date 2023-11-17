@@ -106,20 +106,20 @@ namespace Unity.FPS.Gameplay
         [Header("Funny test")]
         public GameObject gameObjectSphere;
         private GameObject collidingSphere;
-        public Rigidbody rb;
+        public GameObject playerMesh;
         private bool collided;
 
         [Header("Variables for grappling")]
         //Referencing
         public Transform cam;
         public Transform gunTip;
-        public LayerMask whatIsGrappleable;
         public LineRenderer lr;
         public float grappleSpeed = 30f;
 
         //Grappling
         public float grappleDistance;
         private Vector3 targetPosition;
+        public LayerMask whatIsGrappleable;
 
         //Cooldown
         public float grapplingCd;
@@ -137,6 +137,9 @@ namespace Unity.FPS.Gameplay
         public Vector3 LastPos;
         private Vector3 slideDirection;
         public float speed;
+
+        [Header("Animation")]
+        public Animator animator;
 
         [Header("Intialized at Start")]
         public UnityAction<bool> OnStanceChanged;
@@ -168,7 +171,6 @@ namespace Unity.FPS.Gameplay
         PlayerWeaponsManager m_WeaponsManager;
         public Actor m_Actor;
         public Vector3 m_GroundNormal;
-        public Vector3 m_slideDirection;
         Vector3 m_CharacterVelocity;
         Vector3 m_LatestImpactSpeed;
         public float m_LastTimeJumped = 0f;
@@ -211,6 +213,9 @@ namespace Unity.FPS.Gameplay
 
             m_Controller.enableOverlapRecovery = true;
 
+            //animator = GetComponent<Animator>();
+            Debug.Log(animator);
+
             m_Health.OnDie += OnDie;
 
             // force the crouch state to false when starting
@@ -222,6 +227,8 @@ namespace Unity.FPS.Gameplay
         void Update()
         {
             bool isSprinting = m_InputHandler.GetSprintInputHeld();
+
+            playerMesh.transform.rotation = Quaternion.Euler(cam.forward.x, cam.forward.y, cam.forward.z);
 
             // check for Y kill
             if (!IsDead && transform.position.y < KillHeight)
@@ -261,8 +268,17 @@ namespace Unity.FPS.Gameplay
             {
                 this.PlayerCamera.fieldOfView = 90f;
             }
-            else if (m_InputHandler.GetSprintInputReleased()) this.PlayerCamera.fieldOfView = 80f;
+            else if (m_InputHandler.GetSprintInputReleased())
+            {
+                this.PlayerCamera.fieldOfView = 80f;
+                if (speed > 0)
+                {
+                    animator.SetBool("isWalking", true);
+                }
+                else animator.SetBool("isWalking", false);
+            }
 
+            Debug.Log(animator.GetBool("isWalking"));
             // crouching or sliding or hooking
             if (m_InputHandler.GetHookDown())
             {
@@ -285,16 +301,19 @@ namespace Unity.FPS.Gameplay
             }
             else if (m_InputHandler.GetCrouchInputDown() && isSprinting && !IsCrouching && speed > 2f)
             {
-                Sliding();                 
+                Sliding();
+                animator.SetBool("isSliding", true);
             }
             else if (m_InputHandler.GetCrouchInputDown() && !isSprinting && !IsCrouching)
             {
                 SetCrouchingState(!IsCrouching, false);
+                animator.SetBool("isCrouching", true);
                 UpdateCharacterHeight(false);
 
             }  else if(IsCrouching && m_InputHandler.GetCrouchInputDown())
             {
                 SetCrouchingState(false, true);
+                animator.SetBool("isCrouching", false);
                 UpdateCharacterHeight(false);
             }
 
@@ -310,6 +329,12 @@ namespace Unity.FPS.Gameplay
         private void LateUpdate()
         {
             lr.SetPosition(0, gunTip.position);
+
+            if (speed < 0.2f)
+            {
+                animator.SetBool("isWalking", false);
+            }
+            
         }
         private void FixedUpdate() 
         {
@@ -343,6 +368,8 @@ namespace Unity.FPS.Gameplay
             else if(m_justSlide && speed <= 2f)
             {
                 isSliding = false;
+                animator.SetBool("isSliding", false);
+                animator.SetBool("isCrouching", true);
                 m_justSlide = false;
                 dragFriction = 0.5f;
                 SetCrouchingState(true, true);
