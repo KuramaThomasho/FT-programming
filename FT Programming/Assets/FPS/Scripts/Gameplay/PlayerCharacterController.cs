@@ -131,8 +131,12 @@ namespace Unity.FPS.Gameplay
 
         [Header("Sliding Variables")]
         private bool isSliding = false;
+        private bool m_justSlide = false;
         //Drag already exist
-        public float;
+        public Vector3 currentPos;
+        public Vector3 LastPos;
+        private Vector3 slideDirection;
+        public float speed;
 
         [Header("Intialized at Start")]
         public UnityAction<bool> OnStanceChanged;
@@ -212,6 +216,7 @@ namespace Unity.FPS.Gameplay
             // force the crouch state to false when starting
             SetCrouchingState(false, true);
             UpdateCharacterHeight(true);
+            lr.enabled = false;
         }
 
         void Update()
@@ -252,7 +257,10 @@ namespace Unity.FPS.Gameplay
                 }
             }
 
-            if (m_InputHandler.GetSprintInputHeld()) this.PlayerCamera.fieldOfView = 90f;
+            if (m_InputHandler.GetSprintInputHeld() && !IsCrouching)
+            {
+                this.PlayerCamera.fieldOfView = 90f;
+            }
             else if (m_InputHandler.GetSprintInputReleased()) this.PlayerCamera.fieldOfView = 80f;
 
             // crouching or sliding or hooking
@@ -272,26 +280,22 @@ namespace Unity.FPS.Gameplay
                     // Force grounding to false
                     IsGrounded = false;
                 }
+                else { grappling = false; }
                 
             }
-            else if (m_InputHandler.GetCrouchInputDown() && isSprinting && !IsCrouching)
+            else if (m_InputHandler.GetCrouchInputDown() && isSprinting && !IsCrouching && speed > 2f)
             {
-                float chosenGroundCheckDistance =
-               IsGrounded ? (m_Controller.skinWidth + GroundCheckDistance) : k_GroundCheckDistanceInAir;
-
-                //Produces ray cast and it is basically a ground check
-                if (Physics.CapsuleCast(GetCapsuleBottomHemisphere(), GetCapsuleTopHemisphere(m_Controller.height),
-                            m_Controller.radius, Vector3.down, out RaycastHit hit, chosenGroundCheckDistance, GroundCheckLayers,
-                            QueryTriggerInteraction.Ignore))
-                {
-                    Sliding(hit.normal);
-                    //UpdateCharacterHeight(false);
-                }
-                    
+                Sliding();                 
             }
-            else if (m_InputHandler.GetCrouchInputDown() && !isSprinting)
+            else if (m_InputHandler.GetCrouchInputDown() && !isSprinting && !IsCrouching)
             {
                 SetCrouchingState(!IsCrouching, false);
+                UpdateCharacterHeight(false);
+
+            }  else if(IsCrouching && m_InputHandler.GetCrouchInputDown())
+            {
+                SetCrouchingState(false, true);
+                UpdateCharacterHeight(false);
             }
 
             if (hookTimer > 0) hookTimer -= Time.deltaTime;
@@ -305,8 +309,7 @@ namespace Unity.FPS.Gameplay
 
         private void LateUpdate()
         {
-            if (grappling) 
-                lr.SetPosition(0, gunTip.position);
+            lr.SetPosition(0, gunTip.position);
         }
         private void FixedUpdate() 
         {
@@ -319,23 +322,36 @@ namespace Unity.FPS.Gameplay
                 //Debug.Log(Direction.magnitude);
 
                 CharacterVelocity += Direction.normalized * grappleSpeed;
-
-
             }
+
+            currentPos = transform.position;
+            speed = (currentPos - LastPos).magnitude / Time.deltaTime;
+            //Debug.Log(speed);
+            LastPos = currentPos;
 
             if (hookTimer <= 0 && Direction.magnitude < 0.5f)
             {
                 grappling = false;
             }
 
-            if (isSliding)
+            if (isSliding && speed > 2f)
             {
-                CharacterVelocity = Vector3.back * dragFriction * Time.deltaTime;
+                CharacterVelocity -= cam.forward * dragFriction * Time.deltaTime;
+                dragFriction += 2f;
+                
+            } 
+            else if(m_justSlide && speed <= 2f)
+            {
+                isSliding = false;
+                m_justSlide = false;
+                dragFriction = 0.5f;
+                SetCrouchingState(true, true);
+                UpdateCharacterHeight(true);
             }
-            //Debug.Log(transform.up);
+            //else if (isSliding && speed < 2f) Debug.Log("Lost all speed"); isSliding = false; //dragFriction = 0.5f;
 
         }
-        public void Sliding(Vector3 direction)
+        public void Sliding()
         {
             /*
              * Use crouch code for capsule height
@@ -344,16 +360,18 @@ namespace Unity.FPS.Gameplay
              * when speed 0 set crouch to true
              */
             //Changes the character height
-            CharacterVelocity = Vector3.forward * SlideSpeed;
+
+            m_justSlide = true;
+            isSliding = true;
+            slideDirection = cam.forward;
+
+            CharacterVelocity = cam.forward * SlideSpeed;
 
             //CharacterVelocity = Vector3.back * dragFriction * Time.deltaTime;
 
             m_TargetCharacterHeight = CapsuleHeightCrouching;
 
             UpdateCharacterHeight(false);
-            
-
-
         }
         private bool canHook()
         {
@@ -384,7 +402,7 @@ namespace Unity.FPS.Gameplay
 
                 grapplingCdTimer = grapplingCd/2f;
 
-                Invoke(nameof(DestroyLine), 5f);
+                Invoke(nameof(DestroyLine),3f);
             }
             else
             {
@@ -394,7 +412,7 @@ namespace Unity.FPS.Gameplay
 
                 grapplingCdTimer = grapplingCd;
 
-                Invoke(nameof(DestroyLine), 2f);
+                Invoke(nameof(DestroyLine), 1f);
 
             }
 
@@ -436,8 +454,8 @@ namespace Unity.FPS.Gameplay
                         // storing the upward direction for the surface found
                         m_GroundNormal = hit.normal;
 
-                        Debug.Log(m_GroundNormal);
-                        Debug.Log(hit.normal);
+                        //Debug.Log(m_GroundNormal);
+                        //Debug.Log(hit.normal);
 
                         // Only consider this a valid ground hit if the ground normal goes in the same direction as the character up
                         // and if the slope angle is lower than the character controller's limit
@@ -515,6 +533,7 @@ namespace Unity.FPS.Gameplay
                     // jumping
                     if (IsGrounded && m_InputHandler.GetJumpInputDown())
                     {
+                        isSliding = false;
                          // force the crouch state to false
                         if (SetCrouchingState(false, true))
                         {
