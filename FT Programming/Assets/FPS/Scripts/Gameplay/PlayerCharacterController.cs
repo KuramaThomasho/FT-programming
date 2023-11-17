@@ -230,6 +230,15 @@ namespace Unity.FPS.Gameplay
 
             playerMesh.transform.rotation = Quaternion.Euler(cam.forward.x, cam.forward.y, cam.forward.z);
 
+            if (m_InputHandler.GetMoveInput().magnitude > 0.5f)
+            {
+                animator.SetBool("isWalking", true);
+            }
+            else
+            {
+                animator.SetBool("isWalking", false);
+            }
+
             // check for Y kill
             if (!IsDead && transform.position.y < KillHeight)
             {
