@@ -40,10 +40,13 @@ namespace Unity.FPS.Gameplay
         public float AccelerationSpeedInAir = 25f;
 
         [Tooltip("Acceleration when sliding")]
-        public float SlideSpeedModifier = 2.5f;
+        public float SlideSpeed = 20f;
 
         [Tooltip("Multiplicator for the sprint speed (based on grounded speed)")]
         public float SprintSpeedModifier = 2f;
+
+        [Tooltip("Drag value to slow down player while sliding")]
+        private float dragFriction = 0.5f;
 
         [Tooltip("Height at which the player dies instantly when falling off the map")]
         public float KillHeight = -50f;
@@ -125,6 +128,11 @@ namespace Unity.FPS.Gameplay
         private float k_HookGroundingPreventionTime = 0.5f;
         public float hookTimer;
         private bool grappling;
+
+        [Header("Sliding Variables")]
+        private bool isSliding = false;
+        //Drag already exist
+        public float;
 
         [Header("Intialized at Start")]
         public UnityAction<bool> OnStanceChanged;
@@ -289,6 +297,7 @@ namespace Unity.FPS.Gameplay
             if (hookTimer > 0) hookTimer -= Time.deltaTime;
             if (grapplingCdTimer > 0) grapplingCdTimer -= Time.deltaTime;
 
+
             UpdateCharacterHeight(false);
             //Debug.Log(CharacterVelocity);
             HandleCharacterMovement();
@@ -319,6 +328,10 @@ namespace Unity.FPS.Gameplay
                 grappling = false;
             }
 
+            if (isSliding)
+            {
+                CharacterVelocity = Vector3.back * dragFriction * Time.deltaTime;
+            }
             //Debug.Log(transform.up);
 
         }
@@ -331,7 +344,12 @@ namespace Unity.FPS.Gameplay
              * when speed 0 set crouch to true
              */
             //Changes the character height
+            CharacterVelocity = Vector3.forward * SlideSpeed;
+
+            //CharacterVelocity = Vector3.back * dragFriction * Time.deltaTime;
+
             m_TargetCharacterHeight = CapsuleHeightCrouching;
+
             UpdateCharacterHeight(false);
             
 
